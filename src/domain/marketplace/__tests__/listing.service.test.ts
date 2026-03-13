@@ -9,6 +9,7 @@ import {
   expireListings,
   toDTO,
 } from "../listing.service";
+import type { ListingType } from "../listing.model";
 
 vi.mock("../listing.repository", () => ({
   createListing: vi.fn(),
@@ -54,7 +55,7 @@ beforeEach(() => {
 describe("toDTO", () => {
   it("converts a listing to DTO with computed totalPrice", () => {
     const listing = makeListing();
-    const dto = toDTO(listing as any);
+    const dto = toDTO(listing as Parameters<typeof toDTO>[0]);
 
     expect(dto.id).toBe("listing-1");
     expect(dto.sellerId).toBe("seller-1");
@@ -72,7 +73,7 @@ describe("toDTO", () => {
   it("includes expiresAt when set", () => {
     const expires = new Date("2026-02-01");
     const listing = makeListing({ expiresAt: expires });
-    const dto = toDTO(listing as any);
+    const dto = toDTO(listing as Parameters<typeof toDTO>[0]);
     expect(dto.expiresAt).toBe(expires.toISOString());
   });
 });
@@ -80,7 +81,7 @@ describe("toDTO", () => {
 describe("createListing", () => {
   it("validates input and creates a listing", async () => {
     const created = makeListing();
-    vi.mocked(listingRepo.createListing).mockResolvedValue(created as any);
+    vi.mocked(listingRepo.createListing).mockResolvedValue(created as Parameters<typeof toDTO>[0]);
 
     const dto = await createListing("seller-1", {
       type: "commodity",
@@ -105,7 +106,7 @@ describe("createListing", () => {
   it("rejects invalid input", async () => {
     await expect(
       createListing("seller-1", {
-        type: "invalid" as any,
+        type: "invalid" as unknown as ListingType,
         itemId: "",
         itemName: "",
         quantity: 0,
@@ -118,7 +119,7 @@ describe("createListing", () => {
 describe("searchListings", () => {
   it("returns active listings as DTOs", async () => {
     vi.mocked(listingRepo.findActiveListings).mockResolvedValue([
-      makeListing() as any,
+      makeListing() as Parameters<typeof toDTO>[0],
     ]);
 
     const results = await searchListings();
@@ -141,7 +142,7 @@ describe("searchListings", () => {
 
 describe("getListingById", () => {
   it("returns DTO when found", async () => {
-    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as any);
+    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as Parameters<typeof toDTO>[0]);
     const dto = await getListingById("listing-1");
     expect(dto).not.toBeNull();
     expect(dto!.id).toBe("listing-1");
@@ -157,8 +158,8 @@ describe("getListingById", () => {
 describe("getMyListings", () => {
   it("returns seller listings as DTOs", async () => {
     vi.mocked(listingRepo.findListingsBySeller).mockResolvedValue([
-      makeListing() as any,
-      makeListing({ id: "listing-2", itemName: "Barley" }) as any,
+      makeListing() as Parameters<typeof toDTO>[0],
+      makeListing({ id: "listing-2", itemName: "Barley" }) as Parameters<typeof toDTO>[0],
     ]);
 
     const results = await getMyListings("seller-1");
@@ -168,9 +169,9 @@ describe("getMyListings", () => {
 
 describe("cancelListing", () => {
   it("cancels an active listing owned by the user", async () => {
-    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as any);
+    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as Parameters<typeof toDTO>[0]);
     vi.mocked(listingRepo.updateListingStatus).mockResolvedValue(
-      makeListing({ status: "cancelled" }) as any
+      makeListing({ status: "cancelled" }) as Parameters<typeof toDTO>[0]
     );
 
     const dto = await cancelListing("seller-1", "listing-1");
@@ -184,13 +185,13 @@ describe("cancelListing", () => {
   });
 
   it("rejects if not the seller", async () => {
-    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as any);
+    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as Parameters<typeof toDTO>[0]);
     await expect(cancelListing("other-user", "listing-1")).rejects.toThrow("Not your listing");
   });
 
   it("rejects if listing is not active", async () => {
     vi.mocked(listingRepo.findListingById).mockResolvedValue(
-      makeListing({ status: "sold" }) as any
+      makeListing({ status: "sold" }) as Parameters<typeof toDTO>[0]
     );
     await expect(cancelListing("seller-1", "listing-1")).rejects.toThrow("Listing is not active");
   });
@@ -198,9 +199,9 @@ describe("cancelListing", () => {
 
 describe("buyListing", () => {
   it("calls atomicBuyListing with correct args", async () => {
-    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as any);
+    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as Parameters<typeof toDTO>[0]);
     vi.mocked(listingRepo.atomicBuyListing).mockResolvedValue(
-      makeListing({ status: "sold", buyerId: "buyer-1" }) as any
+      makeListing({ status: "sold", buyerId: "buyer-1" }) as Parameters<typeof toDTO>[0]
     );
 
     const dto = await buyListing("buyer-1", "listing-1");
@@ -223,18 +224,18 @@ describe("buyListing", () => {
 
   it("rejects if listing is not active", async () => {
     vi.mocked(listingRepo.findListingById).mockResolvedValue(
-      makeListing({ status: "sold" }) as any
+      makeListing({ status: "sold" }) as Parameters<typeof toDTO>[0]
     );
     await expect(buyListing("buyer-1", "listing-1")).rejects.toThrow("Listing is not active");
   });
 
   it("rejects if buyer is the seller", async () => {
-    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as any);
+    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as Parameters<typeof toDTO>[0]);
     await expect(buyListing("seller-1", "listing-1")).rejects.toThrow("Cannot buy your own listing");
   });
 
   it("propagates insufficient balance error from atomic buy", async () => {
-    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as any);
+    vi.mocked(listingRepo.findListingById).mockResolvedValue(makeListing() as Parameters<typeof toDTO>[0]);
     vi.mocked(listingRepo.atomicBuyListing).mockRejectedValue(new Error("Insufficient balance"));
 
     await expect(buyListing("buyer-1", "listing-1")).rejects.toThrow("Insufficient balance");

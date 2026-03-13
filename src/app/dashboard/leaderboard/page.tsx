@@ -32,11 +32,14 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/leaderboard?type=${activeTab}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setEntries)
-      .finally(() => setLoading(false));
+    const fetchLeaderboard = () => {
+      setLoading(true);
+      fetch(`/api/leaderboard?type=${activeTab}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then(setEntries)
+        .finally(() => setLoading(false));
+    };
+    fetchLeaderboard();
   }, [activeTab]);
 
   const activeTabConfig = tabs.find((t) => t.type === activeTab)!;

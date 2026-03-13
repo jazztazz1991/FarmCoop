@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import Header from "../Header";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: any) => (
+  default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -14,7 +14,7 @@ beforeEach(() => {
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({ count: 0 }),
-  }) as any;
+  }) as unknown as typeof global.fetch;
 });
 
 describe("Header", () => {

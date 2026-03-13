@@ -69,7 +69,8 @@ export function useDashboard() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const load = () => { refresh(); };
+    load();
   }, [refresh]);
 
   return { ...state, refresh };

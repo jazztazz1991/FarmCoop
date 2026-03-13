@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser, isApiKeyAuthenticated } from "@/lib/auth";
+import { getAuthenticatedUser } from "@/lib/auth";
 import { getPrices, setBasePrice } from "@/domain/pricing/pricing.service";
 import { ZodError } from "zod";
 

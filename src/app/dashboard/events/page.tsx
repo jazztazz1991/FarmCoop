@@ -41,12 +41,15 @@ export default function EventsPage() {
 
   useEffect(() => {
     if (!selectedServer) {
-      setActiveEvents([]);
-      setUpcomingEvents([]);
+      queueMicrotask(() => {
+        setActiveEvents([]);
+        setUpcomingEvents([]);
+      });
       return;
     }
-    setLoading(true);
-    Promise.all([
+    const fetchEvents = () => {
+      setLoading(true);
+      Promise.all([
       fetch(`/api/servers/${selectedServer}/events?view=active`).then((r) =>
         r.ok ? r.json() : []
       ),
@@ -59,6 +62,8 @@ export default function EventsPage() {
         setUpcomingEvents(upcoming);
       })
       .finally(() => setLoading(false));
+    };
+    fetchEvents();
   }, [selectedServer]);
 
   const formatDateRange = (start: string, end: string) => {

@@ -46,7 +46,7 @@ beforeEach(() => {
 describe("toDTO", () => {
   it("converts a notification to DTO", () => {
     const n = makeNotification();
-    const dto = toDTO(n as any);
+    const dto = toDTO(n as Parameters<typeof toDTO>[0]);
 
     expect(dto.id).toBe("notif-1");
     expect(dto.type).toBe("listing_sold");
@@ -61,7 +61,7 @@ describe("toDTO", () => {
 describe("notify", () => {
   it("creates in-app notification and fires discord webhook", async () => {
     const created = makeNotification();
-    vi.mocked(notificationRepo.createNotification).mockResolvedValue(created as any);
+    vi.mocked(notificationRepo.createNotification).mockResolvedValue(created as Parameters<typeof toDTO>[0]);
 
     const dto = await notify({
       userId: "user-1",
@@ -87,7 +87,7 @@ describe("notify", () => {
 
   it("creates notification without referenceId", async () => {
     const created = makeNotification({ referenceId: null });
-    vi.mocked(notificationRepo.createNotification).mockResolvedValue(created as any);
+    vi.mocked(notificationRepo.createNotification).mockResolvedValue(created as Parameters<typeof toDTO>[0]);
 
     const dto = await notify({
       userId: "user-1",
@@ -108,7 +108,7 @@ describe("notify", () => {
 
   it("does not throw if discord webhook fails", async () => {
     vi.mocked(notificationRepo.createNotification).mockResolvedValue(
-      makeNotification() as any
+      makeNotification() as Parameters<typeof toDTO>[0]
     );
     vi.mocked(sendDiscordWebhook).mockRejectedValue(new Error("Webhook failed"));
 
@@ -126,8 +126,8 @@ describe("notify", () => {
 describe("getNotifications", () => {
   it("returns notifications as DTOs", async () => {
     vi.mocked(notificationRepo.findByUser).mockResolvedValue([
-      makeNotification() as any,
-      makeNotification({ id: "notif-2", read: true }) as any,
+      makeNotification() as Parameters<typeof toDTO>[0],
+      makeNotification({ id: "notif-2", read: true }) as Parameters<typeof toDTO>[0],
     ]);
 
     const results = await getNotifications("user-1");

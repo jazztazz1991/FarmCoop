@@ -9,7 +9,6 @@
  * - Cap: 300% of base price
  */
 
-const DAMPING_FACTOR = 0.5;
 const PRICE_FLOOR_PCT = 10n;   // 10% of base
 const PRICE_CAP_PCT = 300n;    // 300% of base
 

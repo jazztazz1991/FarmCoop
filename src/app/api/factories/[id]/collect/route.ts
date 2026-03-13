@@ -13,7 +13,7 @@ export async function POST(
   }
 
   try {
-    const { id: _factoryId } = await params;
+    await params;
     const body = await request.json();
     const order = await collectOutput(body.orderId, user.id);
     return NextResponse.json(order);

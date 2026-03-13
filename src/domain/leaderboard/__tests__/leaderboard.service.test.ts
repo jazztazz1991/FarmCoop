@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getLeaderboard } from "../leaderboard.service";
+import type { LeaderboardType } from "../leaderboard.model";
 
 vi.mock("../leaderboard.repository", () => ({
   findRichestUsers: vi.fn(),
@@ -89,7 +90,7 @@ describe("getLeaderboard", () => {
 
   it("throws on unknown leaderboard type", async () => {
     await expect(
-      getLeaderboard("invalid" as any)
+      getLeaderboard("invalid" as unknown as LeaderboardType)
     ).rejects.toThrow("Unknown leaderboard type");
   });
 

@@ -79,7 +79,7 @@ describe("updateProfile", () => {
 
   it("rejects invalid career", async () => {
     await expect(
-      updateProfile("user-1", { career: "pirate" as any })
+      updateProfile("user-1", { career: "pirate" as unknown as "farmer" })
     ).rejects.toThrow();
   });
 });

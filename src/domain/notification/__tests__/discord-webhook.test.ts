@@ -27,7 +27,7 @@ describe("sendDiscordWebhook", () => {
     );
 
     const body = JSON.parse(
-      (global.fetch as any).mock.calls[0][1].body
+      vi.mocked(global.fetch).mock.calls[0][1]!.body as string
     );
     expect(body.embeds[0].title).toBe("Test Title");
     expect(body.embeds[0].description).toBe("Test message");

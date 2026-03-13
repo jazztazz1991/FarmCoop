@@ -113,7 +113,7 @@ describe("createEvent", () => {
         gameServerId: SERVER,
         title: "Bad",
         description: "Invalid type",
-        type: "invalid_type" as any,
+        type: "invalid_type" as unknown as string,
         multiplier: 1.0,
         startsAt: "2026-03-01T00:00:00Z",
         endsAt: "2026-03-07T00:00:00Z",
