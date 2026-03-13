@@ -1,0 +1,356 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  discordId   String   @unique
+  displayName String
+  avatarUrl   String?
+  role        String   @default("member")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  farms          Farm[]
+  wallet         Wallet?
+  sessions       Session[]
+  sellerListings Listing[] @relation("sellerListings")
+  buyerListings  Listing[] @relation("buyerListings")
+  notifications    Notification[]
+  postedContracts  Contract[] @relation("postedContracts")
+  claimedContracts Contract[] @relation("claimedContracts")
+  career           String     @default("farmer") // farmer | trucker | dealer | inspector
+  loans            Loan[]
+  savingsAccounts  SavingsAccount[]
+  certificates     Certificate[]
+  insurancePolicies InsurancePolicy[]
+  factories        Factory[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model GameServer {
+  id              String   @id @default(cuid())
+  name            String
+  transportType   String
+  transportConfig Json
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  farms           Farm[]
+  transactions    Transaction[]
+  commodityPrices CommodityPrice[]
+  contracts       Contract[]
+  events          Event[]
+  loans           Loan[]
+  savingsAccounts SavingsAccount[]
+  certificates    Certificate[]
+  insurancePolicies InsurancePolicy[]
+  factories       Factory[]
+}
+
+model Farm {
+  id           String     @id @default(cuid())
+  gameServerId String
+  gameServer   GameServer @relation(fields: [gameServerId], references: [id])
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  farmSlot     Int
+  name         String
+  createdAt    DateTime   @default(now())
+
+  receivedTransactions Transaction[]
+
+  @@unique([gameServerId, farmSlot])
+}
+
+model Wallet {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id])
+  balance   BigInt         @default(0)
+  updatedAt DateTime       @updatedAt
+
+  ledger WalletLedger[]
+}
+
+model WalletLedger {
+  id          String   @id @default(cuid())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+  amount      BigInt
+  type        String
+  referenceId String?
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model Listing {
+  id           String    @id @default(cuid())
+  sellerId     String
+  seller       User      @relation("sellerListings", fields: [sellerId], references: [id])
+  buyerId      String?
+  buyer        User?     @relation("buyerListings", fields: [buyerId], references: [id])
+  type         String    // equipment | commodity
+  itemId       String    // equipment XML path or commodity type
+  itemName     String
+  quantity     Int       @default(1)
+  pricePerUnit BigInt
+  status       String    @default("active") // active | sold | cancelled | expired
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // listing_sold | listing_purchased | deposit_confirmed | withdrawal_sent | transfer_received
+  title       String
+  message     String
+  referenceId String?  // links to listing, transaction, etc.
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Transaction {
+  id               String    @id @default(cuid())
+  type             String
+  amount           Int?
+  equipmentId      String?
+  status           String    @default("pending")
+  senderId         String
+  recipientFarmId  String
+  recipientFarm    Farm      @relation(fields: [recipientFarmId], references: [id])
+  gameServerId     String
+  gameServer       GameServer @relation(fields: [gameServerId], references: [id])
+  farmSlot         Int
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  bridgePickedUpAt DateTime?
+  deliveredAt      DateTime?
+  confirmedAt      DateTime?
+}
+
+model CommodityPrice {
+  id            String     @id @default(cuid())
+  gameServerId  String
+  gameServer    GameServer @relation(fields: [gameServerId], references: [id])
+  commodityId   String     // e.g. WHEAT, BARLEY, CANOLA
+  commodityName String
+  basePrice     BigInt     // admin-set anchor price
+  currentPrice  BigInt     // computed from supply/demand
+  supply        Int        @default(0)
+  demand        Int        @default(0)
+  updatedAt     DateTime   @updatedAt
+  createdAt     DateTime   @default(now())
+
+  @@unique([gameServerId, commodityId])
+}
+
+model PriceHistory {
+  id           String   @id @default(cuid())
+  gameServerId String
+  commodityId  String
+  price        BigInt
+  supply       Int
+  demand       Int
+  recordedAt   DateTime @default(now())
+
+  @@index([gameServerId, commodityId, recordedAt])
+}
+
+model Contract {
+  id              String     @id @default(cuid())
+  gameServerId    String
+  gameServer      GameServer @relation(fields: [gameServerId], references: [id])
+  posterId        String
+  poster          User       @relation("postedContracts", fields: [posterId], references: [id])
+  claimerId       String?
+  claimer         User?      @relation("claimedContracts", fields: [claimerId], references: [id])
+  commodityId     String
+  commodityName   String
+  quantity        Int        // amount requested
+  pricePerUnit    BigInt     // what poster pays per unit
+  totalPayout     BigInt     // quantity * pricePerUnit, escrowed on creation
+  status          String     @default("open") // open | claimed | delivered | completed | cancelled | expired
+  expiresAt       DateTime
+  deliveryDeadline DateTime? // deadline after claim, auto-releases if exceeded
+  claimedAt       DateTime?
+  deliveredAt     DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Event {
+  id           String     @id @default(cuid())
+  gameServerId String
+  gameServer   GameServer @relation(fields: [gameServerId], references: [id])
+  title        String
+  description  String
+  type         String     // bonus_payout | double_prices | harvest_rush | custom
+  multiplier   Float      @default(1.0) // e.g. 2.0 for 2x payouts
+  startsAt     DateTime
+  endsAt       DateTime
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+// ── Banking ──────────────────────────────────────────────
+
+model Loan {
+  id                String     @id @default(cuid())
+  borrowerId        String
+  borrower          User       @relation(fields: [borrowerId], references: [id])
+  gameServerId      String
+  gameServer        GameServer @relation(fields: [gameServerId], references: [id])
+  principal         BigInt
+  interestRate      Int        // basis points (500 = 5.00%)
+  remainingBalance  BigInt
+  monthlyPayment    BigInt
+  termMonths        Int
+  paymentsRemaining Int
+  status            String     @default("active") // active | paid_off | defaulted
+  nextPaymentDue    DateTime
+  disbursedAt       DateTime   @default(now())
+  paidOffAt         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model SavingsAccount {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id])
+  gameServerId   String
+  gameServer     GameServer @relation(fields: [gameServerId], references: [id])
+  balance        BigInt     @default(0)
+  apyBasisPoints Int        @default(200) // 2.00%
+  lastAccrualAt  DateTime   @default(now())
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([userId, gameServerId])
+}
+
+model Certificate {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id])
+  gameServerId   String
+  gameServer     GameServer @relation(fields: [gameServerId], references: [id])
+  principal      BigInt
+  apyBasisPoints Int        // higher than savings
+  termDays       Int        // 30, 90, 180
+  maturesAt      DateTime
+  status         String     @default("active") // active | matured | withdrawn | penalty_withdrawn
+  createdAt      DateTime   @default(now())
+}
+
+// ── Insurance ────────────────────────────────────────────
+
+model InsurancePolicy {
+  id             String     @id @default(cuid())
+  holderId       String
+  holder         User       @relation(fields: [holderId], references: [id])
+  gameServerId   String
+  gameServer     GameServer @relation(fields: [gameServerId], references: [id])
+  type           String     // crop | vehicle | liability
+  coverageAmount BigInt
+  premium        BigInt
+  deductible     BigInt     @default(0)
+  status         String     @default("active") // active | expired | claimed | cancelled
+  commodityId    String?
+  commodityName  String?
+  strikePrice    BigInt?    // price floor guarantee for crop insurance
+  equipmentId    String?
+  equipmentName  String?
+  startsAt       DateTime   @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  claims InsuranceClaim[]
+}
+
+model InsuranceClaim {
+  id          String          @id @default(cuid())
+  policyId    String
+  policy      InsurancePolicy @relation(fields: [policyId], references: [id])
+  claimAmount BigInt
+  payout      BigInt
+  reason      String
+  status      String          @default("pending") // pending | approved | denied
+  resolvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+}
+
+// ── Production ───────────────────────────────────────────
+
+model Recipe {
+  id             String        @id @default(cuid())
+  name           String
+  outputItemId   String
+  outputItemName String
+  outputQuantity Int
+  processingTime Int           // seconds per cycle
+  createdAt      DateTime      @default(now())
+
+  inputs    RecipeInput[]
+  factories Factory[]
+}
+
+model RecipeInput {
+  id       String @id @default(cuid())
+  recipeId String
+  recipe   Recipe @relation(fields: [recipeId], references: [id])
+  itemId   String
+  itemName String
+  quantity Int
+
+  @@unique([recipeId, itemId])
+}
+
+model Factory {
+  id           String           @id @default(cuid())
+  gameServerId String
+  gameServer   GameServer       @relation(fields: [gameServerId], references: [id])
+  ownerId      String
+  owner        User             @relation(fields: [ownerId], references: [id])
+  recipeId     String
+  recipe       Recipe           @relation(fields: [recipeId], references: [id])
+  name         String
+  cyclesRun    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  orders ProductionOrder[]
+}
+
+model ProductionOrder {
+  id          String    @id @default(cuid())
+  factoryId   String
+  factory     Factory   @relation(fields: [factoryId], references: [id])
+  cycles      Int
+  status      String    @default("pending") // pending | processing | completed | cancelled
+  startedAt   DateTime?
+  completesAt DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+}

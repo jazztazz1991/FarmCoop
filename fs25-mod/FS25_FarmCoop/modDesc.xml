@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<modDesc descVersion="106">
+    <author>FarmCoop</author>
+    <version>0.1.0.0</version>
+    <title>
+        <en>FarmCoop Bridge</en>
+        <de>FarmCoop Brücke</de>
+    </title>
+    <description>
+        <en>Receives money and equipment transactions from the FarmCoop web platform. Polls a local XML file written by the bridge service and executes in-game actions.</en>
+        <de>Empfängt Geld- und Ausrüstungstransaktionen von der FarmCoop-Webplattform.</de>
+    </description>
+    <iconFilename>icon.png</iconFilename>
+    <multiplayer supported="true" />
+
+    <extraSourceFiles>
+        <sourceFile filename="FarmCoopMod.lua" />
+    </extraSourceFiles>
+</modDesc>

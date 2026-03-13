@@ -1,0 +1,62 @@
+services:
+  # Next.js web app
+  - type: web
+    name: farmcoop
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: farmcoop-db
+          property: connectionString
+      - key: API_KEY
+        generateValue: true
+      - key: NEXT_PUBLIC_API_KEY
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /api/health
+
+  # Bridge background worker
+  - type: worker
+    name: farmcoop-bridge
+    runtime: docker
+    dockerfilePath: ./bridge/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: farmcoop-db
+          property: connectionString
+      - key: API_KEY
+        sync: false
+      - key: BRIDGE_API_URL
+        fromService:
+          name: farmcoop
+          type: web
+          property: hostport
+      - key: BRIDGE_TRANSPORT
+        sync: false
+      - key: BRIDGE_FTP_HOST
+        sync: false
+      - key: BRIDGE_FTP_PORT
+        sync: false
+      - key: BRIDGE_FTP_USER
+        sync: false
+      - key: BRIDGE_FTP_PASSWORD
+        sync: false
+      - key: BRIDGE_FTP_SECURE
+        sync: false
+      - key: BRIDGE_FTP_REMOTE_PATH
+        sync: false
+
+databases:
+  - name: farmcoop-db
+    plan: free
+    databaseName: farmcoop
+    user: farmcoop

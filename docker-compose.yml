@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: farmcoop
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/farmcoop
+      API_KEY: ${API_KEY}
+      NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  bridge:
+    build:
+      context: .
+      dockerfile: bridge/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/farmcoop
+      API_KEY: ${API_KEY}
+      BRIDGE_API_URL: http://app:3000
+      BRIDGE_TRANSPORT: ${BRIDGE_TRANSPORT:-local}
+      BRIDGE_POLL_INTERVAL_MS: ${BRIDGE_POLL_INTERVAL_MS:-5000}
+      BRIDGE_FTP_HOST: ${BRIDGE_FTP_HOST:-}
+      BRIDGE_FTP_PORT: ${BRIDGE_FTP_PORT:-21}
+      BRIDGE_FTP_USER: ${BRIDGE_FTP_USER:-}
+      BRIDGE_FTP_PASSWORD: ${BRIDGE_FTP_PASSWORD:-}
+      BRIDGE_FTP_SECURE: ${BRIDGE_FTP_SECURE:-false}
+      BRIDGE_FTP_REMOTE_PATH: ${BRIDGE_FTP_REMOTE_PATH:-}
+
+volumes:
+  pgdata:
