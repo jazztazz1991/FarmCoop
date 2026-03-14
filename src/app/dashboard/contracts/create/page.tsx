@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/fetch";
 
 interface Server {
   id: string;
@@ -43,7 +44,7 @@ export default function CreateContractPage() {
     expiresAt.setDate(expiresAt.getDate() + Number(expiresIn));
 
     try {
-      const res = await fetch(`/api/servers/${gameServerId}/contracts`, {
+      const res = await apiFetch(`/api/servers/${gameServerId}/contracts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

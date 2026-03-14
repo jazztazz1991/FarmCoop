@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 
 interface Listing {
@@ -25,7 +26,7 @@ export default function MarketplacePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const fetchListings = async () => {
+  const fetchListings = useCallback(async () => {
     const params = new URLSearchParams();
     if (typeFilter) params.set("type", typeFilter);
     if (searchQuery) params.set("search", searchQuery);
@@ -35,11 +36,11 @@ export default function MarketplacePage() {
       setListings(await res.json());
     }
     setLoading(false);
-  };
+  }, [typeFilter, searchQuery]);
 
   useEffect(() => {
     fetchListings();
-  }, [typeFilter]);
+  }, [fetchListings]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +53,7 @@ export default function MarketplacePage() {
     setBuyingId(listingId);
 
     try {
-      const res = await fetch(`/api/marketplace/listings/${listingId}/buy`, {
+      const res = await apiFetch(`/api/marketplace/listings/${listingId}/buy`, {
         method: "POST",
       });
 

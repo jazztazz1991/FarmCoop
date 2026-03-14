@@ -30,6 +30,12 @@ model User {
   certificates     Certificate[]
   insurancePolicies InsurancePolicy[]
   factories        Factory[]
+  businesses             Business[]
+  loanApplications       LoanApplication[]    @relation("loanApplications")
+  businessLoans          BusinessLoan[]       @relation("businessLoans")
+  dealershipPurchases    DealershipListing[]  @relation("dealershipPurchases")
+  businessPolicies       BusinessPolicy[]     @relation("businessPolicies")
+  deliveryContractsPoster DeliveryContract[]  @relation("deliveryContractsPoster")
 }
 
 model Session {
@@ -60,6 +66,7 @@ model GameServer {
   certificates    Certificate[]
   insurancePolicies InsurancePolicy[]
   factories       Factory[]
+  businesses      Business[]
 }
 
 model Farm {
@@ -73,6 +80,7 @@ model Farm {
   createdAt    DateTime   @default(now())
 
   receivedTransactions Transaction[]
+  deliveryContracts    DeliveryContract[]
 
   @@unique([gameServerId, farmSlot])
 }
@@ -353,4 +361,169 @@ model ProductionOrder {
   completesAt DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
+}
+
+// ── Player-Run Businesses ──────────────────────────────────
+
+model Business {
+  id           String     @id @default(cuid())
+  ownerId      String
+  owner        User       @relation(fields: [ownerId], references: [id])
+  gameServerId String
+  gameServer   GameServer @relation(fields: [gameServerId], references: [id])
+  type         String     // bank | dealership | insurance | trucking
+  name         String
+  description  String     @default("")
+  status       String     @default("active") // active | suspended | closed
+  settings     Json       @default("{}")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  wallet             BusinessWallet?
+  loanApplications   LoanApplication[]
+  businessLoans      BusinessLoan[]
+  dealershipListings DealershipListing[]
+  businessPolicies   BusinessPolicy[]
+  businessClaims     BusinessClaim[]
+  deliveryContracts  DeliveryContract[]
+
+  @@unique([ownerId, gameServerId, type])
+}
+
+model BusinessWallet {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id])
+  balance    BigInt   @default(0)
+  updatedAt  DateTime @updatedAt
+
+  ledger BusinessLedger[]
+}
+
+model BusinessLedger {
+  id               String         @id @default(cuid())
+  businessWalletId String
+  businessWallet   BusinessWallet @relation(fields: [businessWalletId], references: [id])
+  amount           BigInt
+  type             String
+  referenceId      String?
+  description      String
+  createdAt        DateTime       @default(now())
+}
+
+model LoanApplication {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id])
+  applicantId  String
+  applicant    User      @relation("loanApplications", fields: [applicantId], references: [id])
+  gameServerId String
+  principal    BigInt
+  termMonths   Int
+  status       String    @default("pending") // pending | approved | denied
+  denialReason String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  loan BusinessLoan?
+}
+
+model BusinessLoan {
+  id                String          @id @default(cuid())
+  businessId        String
+  business          Business        @relation(fields: [businessId], references: [id])
+  applicationId     String          @unique
+  application       LoanApplication @relation(fields: [applicationId], references: [id])
+  borrowerId        String
+  borrower          User            @relation("businessLoans", fields: [borrowerId], references: [id])
+  gameServerId      String
+  principal         BigInt
+  interestRate      Int             // basis points (500 = 5.00%)
+  remainingBalance  BigInt
+  monthlyPayment    BigInt
+  termMonths        Int
+  paymentsRemaining Int
+  status            String          @default("active") // active | paid_off | defaulted
+  nextPaymentDue    DateTime
+  disbursedAt       DateTime        @default(now())
+  paidOffAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model DealershipListing {
+  id              String    @id @default(cuid())
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id])
+  itemId          String
+  itemName        String
+  category        String    @default("equipment") // equipment | commodity
+  quantity        Int       @default(1)
+  costBasis       BigInt    @default(0)
+  pricePerUnit    BigInt
+  status          String    @default("active") // active | sold | cancelled
+  buyerId         String?
+  buyer           User?     @relation("dealershipPurchases", fields: [buyerId], references: [id])
+  recipientFarmId String?
+  transactionId   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model BusinessPolicy {
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id])
+  holderId       String
+  holder         User      @relation("businessPolicies", fields: [holderId], references: [id])
+  gameServerId   String
+  type           String    // crop | vehicle | liability
+  coverageAmount BigInt
+  premium        BigInt
+  deductible     BigInt    @default(0)
+  status         String    @default("active") // active | expired | claimed | cancelled
+  commodityId    String?
+  commodityName  String?
+  strikePrice    BigInt?
+  equipmentId    String?
+  equipmentName  String?
+  startsAt       DateTime  @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  claims BusinessClaim[]
+}
+
+model BusinessClaim {
+  id          String         @id @default(cuid())
+  businessId  String
+  business    Business       @relation(fields: [businessId], references: [id])
+  policyId    String
+  policy      BusinessPolicy @relation(fields: [policyId], references: [id])
+  claimAmount BigInt
+  payout      BigInt         @default(0)
+  reason      String
+  status      String         @default("pending") // pending | approved | denied
+  resolvedAt  DateTime?
+  createdAt   DateTime       @default(now())
+}
+
+model DeliveryContract {
+  id                String    @id @default(cuid())
+  businessId        String
+  business          Business  @relation(fields: [businessId], references: [id])
+  posterId          String
+  poster            User      @relation("deliveryContractsPoster", fields: [posterId], references: [id])
+  gameServerId      String
+  destinationFarmId String
+  destinationFarm   Farm      @relation(fields: [destinationFarmId], references: [id])
+  itemDescription   String
+  payout            BigInt
+  status            String    @default("open") // open | accepted | in_transit | delivered | completed | cancelled
+  acceptedAt        DateTime?
+  deliveredAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }

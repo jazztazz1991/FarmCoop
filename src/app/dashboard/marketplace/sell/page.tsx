@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 
 export default function SellPage() {
   const [type, setType] = useState<"commodity" | "equipment">("commodity");
@@ -24,7 +25,7 @@ export default function SellPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/marketplace/listings", {
+      const res = await apiFetch("/api/marketplace/listings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

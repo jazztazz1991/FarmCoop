@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
+import Image from "next/image";
 
 interface Profile {
   id: string;
@@ -56,7 +58,7 @@ export default function ProfilePage() {
         return;
       }
 
-      const res = await fetch("/api/users/me", {
+      const res = await apiFetch("/api/users/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -94,9 +96,11 @@ export default function ProfilePage() {
 
       <div className="flex items-center gap-4 mb-6">
         {profile.avatarUrl ? (
-          <img
+          <Image
             src={profile.avatarUrl}
             alt=""
+            width={64}
+            height={64}
             className="w-16 h-16 rounded-full"
           />
         ) : (

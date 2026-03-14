@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
 
@@ -26,18 +27,18 @@ export default function MyContractsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const fetchContracts = async () => {
+  const fetchContracts = useCallback(async () => {
     setLoading(true);
     const res = await fetch(`/api/contracts/mine?type=${tab}`);
     if (res.ok) {
       setContracts(await res.json());
     }
     setLoading(false);
-  };
+  }, [tab]);
 
   useEffect(() => {
     fetchContracts();
-  }, [tab]);
+  }, [fetchContracts]);
 
   const handleAction = async (
     contractId: string,
@@ -50,9 +51,9 @@ export default function MyContractsPage() {
     try {
       let res: Response;
       if (action === "cancel") {
-        res = await fetch(`/api/contracts/${contractId}`, { method: "DELETE" });
+        res = await apiFetch(`/api/contracts/${contractId}`, { method: "DELETE" });
       } else {
-        res = await fetch(`/api/contracts/${contractId}/${action}`, {
+        res = await apiFetch(`/api/contracts/${contractId}/${action}`, {
           method: "POST",
         });
       }

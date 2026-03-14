@@ -10,6 +10,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("next/image", () => ({
+  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} />,
+}));
+
 beforeEach(() => {
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,

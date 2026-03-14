@@ -17,7 +17,17 @@ export type NotificationType =
   | "claim_denied"
   | "production_completed"
   | "production_collected"
-  | "factory_created";
+  | "factory_created"
+  | "loan_application_received"
+  | "loan_application_approved"
+  | "loan_application_denied"
+  | "business_loan_payment"
+  | "dealership_sale"
+  | "insurance_claim_filed"
+  | "insurance_claim_resolved"
+  | "delivery_request_posted"
+  | "delivery_accepted"
+  | "delivery_confirmed";
 
 export interface Notification {
   id: string;

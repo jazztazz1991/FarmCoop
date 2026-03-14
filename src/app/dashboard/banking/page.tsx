@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import LoanCard from "@/components/dashboard/LoanCard";
 import SavingsCard from "@/components/dashboard/SavingsCard";
 import CertificateCard from "@/components/dashboard/CertificateCard";
@@ -72,7 +73,7 @@ export default function BankingPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchLoans = async () => {
+  const fetchLoans = useCallback(async () => {
     if (!selectedServer) return;
     setLoading(true);
     const res = await fetch(
@@ -80,9 +81,9 @@ export default function BankingPage() {
     );
     if (res.ok) setLoans(await res.json());
     setLoading(false);
-  };
+  }, [selectedServer]);
 
-  const fetchSavings = async () => {
+  const fetchSavings = useCallback(async () => {
     if (!selectedServer) return;
     setLoading(true);
     const res = await fetch(
@@ -90,9 +91,9 @@ export default function BankingPage() {
     );
     if (res.ok) setSavings(await res.json());
     setLoading(false);
-  };
+  }, [selectedServer]);
 
-  const fetchCertificates = async () => {
+  const fetchCertificates = useCallback(async () => {
     if (!selectedServer) return;
     setLoading(true);
     const res = await fetch(
@@ -100,7 +101,7 @@ export default function BankingPage() {
     );
     if (res.ok) setCertificates(await res.json());
     setLoading(false);
-  };
+  }, [selectedServer]);
 
   useEffect(() => {
     if (!selectedServer) {
@@ -112,14 +113,14 @@ export default function BankingPage() {
     if (activeTab === "loans") fetchLoans();
     if (activeTab === "savings") fetchSavings();
     if (activeTab === "cds") fetchCertificates();
-  }, [selectedServer, activeTab]);
+  }, [selectedServer, activeTab, fetchLoans, fetchSavings, fetchCertificates]);
 
   const handleLoanApply = async () => {
     setError("");
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch("/api/banking/loans", {
+      const res = await apiFetch("/api/banking/loans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,7 +150,7 @@ export default function BankingPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/banking/loans/${loanId}/pay`, {
+      const res = await apiFetch(`/api/banking/loans/${loanId}/pay`, {
         method: "POST",
       });
       if (!res.ok) {
@@ -170,7 +171,7 @@ export default function BankingPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch("/api/banking/savings/deposit", {
+      const res = await apiFetch("/api/banking/savings/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -198,7 +199,7 @@ export default function BankingPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch("/api/banking/savings/withdraw", {
+      const res = await apiFetch("/api/banking/savings/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -226,7 +227,7 @@ export default function BankingPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch("/api/banking/certificates", {
+      const res = await apiFetch("/api/banking/certificates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -256,7 +257,7 @@ export default function BankingPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/banking/certificates/${certificateId}/withdraw`,
         { method: "POST" }
       );

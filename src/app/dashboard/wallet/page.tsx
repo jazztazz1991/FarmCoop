@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import WalletCard from "@/components/dashboard/WalletCard";
+import { apiFetch } from "@/lib/fetch";
 
 interface Farm {
   id: string;
@@ -65,7 +66,7 @@ export default function WalletPage() {
     setActionLoading(true);
 
     try {
-      const res = await fetch("/api/wallet/deposit", {
+      const res = await apiFetch("/api/wallet/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export default function WalletPage() {
     setActionLoading(true);
 
     try {
-      const res = await fetch("/api/wallet/withdraw", {
+      const res = await apiFetch("/api/wallet/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 
 interface Notification {
   id: string;
@@ -35,7 +36,7 @@ export default function NotificationsPage() {
     setError("");
     setMarkingAllRead(true);
     try {
-      const res = await fetch("/api/notifications", { method: "POST" });
+      const res = await apiFetch("/api/notifications", { method: "POST" });
       if (!res.ok) throw new Error("Failed to mark notifications as read");
       await fetchNotifications();
     } catch (err) {
@@ -49,7 +50,7 @@ export default function NotificationsPage() {
     setError("");
     setMarkingReadId(id);
     try {
-      const res = await fetch(`/api/notifications/${id}/read`, {
+      const res = await apiFetch(`/api/notifications/${id}/read`, {
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to mark notification as read");

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import FarmCard from "@/components/dashboard/FarmCard";
+import { apiFetch } from "@/lib/fetch";
 
 interface Server {
   id: string;
@@ -47,7 +48,7 @@ export default function FarmsPage() {
     setClaiming(true);
 
     try {
-      const res = await fetch(`/api/servers/${selectedServer}/farms/claim`, {
+      const res = await apiFetch(`/api/servers/${selectedServer}/farms/claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,7 +75,7 @@ export default function FarmsPage() {
 
   const handleRelease = async (farmId: string, serverId: string) => {
     try {
-      const res = await fetch(`/api/servers/${serverId}/farms/release`, {
+      const res = await apiFetch(`/api/servers/${serverId}/farms/release`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ farmId }),

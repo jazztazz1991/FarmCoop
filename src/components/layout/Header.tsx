@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import Link from "next/link";
+import Image from "next/image";
 
 interface HeaderProps {
   user: {
@@ -29,7 +31,7 @@ export default function Header({ user }: HeaderProps) {
   }, []);
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await apiFetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
   };
 
@@ -61,9 +63,11 @@ export default function Header({ user }: HeaderProps) {
       </Link>
       <div className="flex items-center gap-3">
         {user.avatarUrl ? (
-          <img
+          <Image
             src={user.avatarUrl}
             alt={user.displayName}
+            width={32}
+            height={32}
             className="w-8 h-8 rounded-full"
           />
         ) : (

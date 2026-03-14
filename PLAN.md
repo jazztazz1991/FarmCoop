@@ -1,417 +1,377 @@
-# FarmCoop Platform Plan
+# FarmCoop — Player-Run Business System
 
 ## Context
 
-FarmCoop is a platform for Farming Simulator 25 communities — a modern alternative to farmsimulator.network (FSN NextGen). Our **proven standout feature**: a web-to-game bridge that delivers money and equipment to in-game farms through the website, without the sender joining that server. The POC is complete and working on both local and G-Portal hosted servers.
+FarmCoop has a working economy (wallet, marketplace, banking, insurance, production, contracts) but all financial services are **system-operated** — loans auto-approve, insurance claims auto-evaluate, anyone can trade. The `career` field on User (farmer/trucker/dealer/inspector) is purely cosmetic.
 
-**Decisions made**: Single community focus first. Discord OAuth. PostgreSQL. MVP includes profiles, P2P transfers, marketplace, and wallet.
+**Goal**: Let players run real businesses. A banker career unlocks opening a bank. A dealer opens a dealership. An inspector runs an insurance company. A trucker runs a hauling business. Businesses have their own wallets, custom pricing, and manual approval flows. Other players interact with these businesses as customers.
 
----
-
-## POC Status (COMPLETE)
-
-All working: Next.js API + Bridge (local & FTP) + FS25 Lua Mod. Money transfers and vehicle spawning confirmed end-to-end. 44 tests passing. Transport abstraction supports local filesystem and FTP for hosted servers.
+**Design**: Hybrid model — career gates the ability to create a business type, business entity handles the economics. Existing auto-approve systems remain untouched as the "system" fallback. Web-side only — game integration is limited to bridge delivery transactions.
 
 ---
 
-## Architecture (Production)
+## Phase 1: Foundation (Business Core + Wallet)
 
-```text
-[Landing Page] → [Discord OAuth] → [Dashboard]
-                                        ↓
-                               [Next.js API (PostgreSQL)]
-                                        ↕
-                               [Bridge Service per server]
-                                   ↕ local / FTP
-                               [FS25 Lua Mod]
+### 1.1 New Prisma Models
+
+Add to `prisma/schema.prisma`:
+
+**Business** — the core entity
 ```
+Business: id, ownerId→User, gameServerId→GameServer, type (bank|dealership|insurance|trucking),
+  name, description, status (active|suspended|closed), settings (Json - custom rates/fees)
+  @@unique([ownerId, gameServerId, type])  — one of each type per server per owner
+```
+
+**BusinessWallet** — separate from personal Wallet
+```
+BusinessWallet: id, businessId→Business (unique), balance (BigInt)
+BusinessLedger: id, businessWalletId→BusinessWallet, amount (BigInt), type, referenceId, description
+```
+
+Add relations on User (`businesses Business[]`) and GameServer (`businesses Business[]`).
+
+### 1.2 Domain Module: `src/domain/business/`
+
+```
+src/domain/business/
+  business.model.ts      — BusinessDTO, BusinessWalletDTO, BusinessLedgerEntryDTO, BusinessType, BusinessSettings
+  business.validator.ts  — createBusinessSchema, updateSettingsSchema, walletTransferSchema
+  business.engine.ts     — canCreateBusiness(career, type): boolean, getCareerForType(type): Career
+  business.repository.ts — CRUD + wallet operations (atomic balance + ledger via $transaction)
+  business.service.ts    — createBusiness, getMyBusinesses, getBusiness, updateSettings, closeBusiness,
+                           depositToBusinessWallet, withdrawFromBusinessWallet, getBusinessWallet
+  __tests__/             — Unit tests for engine + service
+```
+
+**Career → Business mapping** (in `business.engine.ts`):
+- `banker` → `bank`
+- `dealer` → `dealership`
+- `inspector` → `insurance`
+- `trucker` → `trucking`
+
+### 1.3 API Routes
+
+```
+POST   /api/businesses                    — Create business (career-gated)
+GET    /api/businesses?type=&serverId=    — Browse businesses (filterable)
+GET    /api/businesses/mine               — My owned businesses
+GET    /api/businesses/[id]               — Business detail
+PATCH  /api/businesses/[id]               — Update settings
+GET    /api/businesses/[id]/wallet        — Business wallet + recent ledger
+POST   /api/businesses/[id]/wallet/deposit   — Owner deposits personal→business
+POST   /api/businesses/[id]/wallet/withdraw  — Owner withdraws business→personal
+```
+
+All use `withAuth`. Business owner checks in service layer.
+
+### 1.4 Dashboard Pages
+
+```
+/dashboard/businesses              — Browse all businesses (filter by type/server)
+/dashboard/businesses/create       — Create form (career-gated, shows which types you can create)
+/dashboard/businesses/mine         — My businesses list
+/dashboard/businesses/[id]         — Owner dashboard (wallet, settings, type-specific tabs)
+```
+
+### 1.5 Components
+
+- `BusinessCard.tsx` — name, type icon, owner, status badge
+- `BusinessWalletCard.tsx` — balance, deposit/withdraw buttons
+
+### 1.6 Sidebar Update
+
+Add "Businesses" nav item in `src/components/layout/Sidebar.tsx`.
+
+### 1.7 New Ledger Types
+
+Add to `LedgerType` in `src/domain/wallet/wallet.model.ts`:
+- `business_wallet_deposit` / `business_wallet_withdrawal`
+
+### 1.8 Tests
+
+- Unit: `business.engine.test.ts` (career gating), `business.service.test.ts` (CRUD, wallet ops)
+- RTL: `BusinessCard.test.tsx`, `BusinessWalletCard.test.tsx`
+- E2E: `businesses.spec.ts` (browse, create, deposit)
 
 ---
 
-## Phase 1: Foundation + Auth + Profiles
+## Phase 2: Player-Run Bank
 
-### 1.1 PostgreSQL Migration
+### 2.1 New Prisma Models
 
-- Update `prisma/schema.prisma` provider from `sqlite` to `postgresql`
-- Add DATABASE_URL for PostgreSQL (local dev via Docker or Railway)
-- Run `prisma migrate dev` to regenerate
+```
+LoanApplication: id, businessId→Business, applicantId→User, gameServerId, principal (BigInt),
+  termMonths, status (pending|approved|denied), denialReason, reviewedAt
 
-### 1.2 Prisma Schema — New Models
-
-```prisma
-model User {
-  id          String   @id @default(cuid())
-  discordId   String   @unique
-  displayName String
-  avatarUrl   String?
-  role        String   @default("member") // member | admin
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  farms       Farm[]
-  wallet      Wallet?
-  sessions    Session[]
-}
-
-model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-}
-
-model GameServer {
-  id              String   @id @default(cuid())
-  name            String
-  transportType   String   // "local" | "ftp"
-  transportConfig Json     // FTP creds or local path (encrypted at rest)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  farms           Farm[]
-}
-
-model Farm {
-  id           String     @id @default(cuid())
-  gameServerId String
-  gameServer   GameServer @relation(fields: [gameServerId], references: [id])
-  userId       String
-  user         User       @relation(fields: [userId], references: [id])
-  farmSlot     Int        // 1-16 in FS25
-  name         String
-  createdAt    DateTime   @default(now())
-  @@unique([gameServerId, farmSlot])
-}
-
-model Wallet {
-  id        String         @id @default(cuid())
-  userId    String         @unique
-  user      User           @relation(fields: [userId], references: [id])
-  balance   BigInt         @default(0)
-  updatedAt DateTime       @updatedAt
-  ledger    WalletLedger[]
-}
-
-model WalletLedger {
-  id          String   @id @default(cuid())
-  walletId    String
-  wallet      Wallet   @relation(fields: [walletId], references: [id])
-  amount      BigInt   // positive = credit, negative = debit
-  type        String   // deposit | withdrawal | transfer_in | transfer_out | sale | purchase
-  referenceId String?  // links to transaction, listing, etc.
-  description String
-  createdAt   DateTime @default(now())
-}
-
-// Evolve existing Transaction model
-model Transaction {
-  id               String    @id @default(cuid())
-  type             String    // money | equipment
-  amount           Int?
-  equipmentId      String?
-  status           String    @default("pending")
-  senderId         String
-  recipientFarmId  String    // references Farm.id
-  gameServerId     String
-  farmSlot         Int
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  bridgePickedUpAt DateTime?
-  deliveredAt      DateTime?
-  confirmedAt      DateTime?
-}
+BusinessLoan: id, businessId→Business, applicationId→LoanApplication (unique), borrowerId→User,
+  gameServerId, principal, interestRate (basis points), remainingBalance, monthlyPayment,
+  termMonths, paymentsRemaining, status (active|paid_off|defaulted), nextPaymentDue
 ```
 
-### 1.3 Auth Domain Module
+Add relations on User (`loanApplications`, `businessLoans`).
 
-```text
-src/domain/auth/
-  auth.model.ts          — User, Session, AuthResult types
-  auth.service.ts        — handleDiscordCallback, validateSession, logout
-  auth.repository.ts     — user + session CRUD
-  __tests__/auth.service.test.ts
+### 2.2 Domain: `src/domain/business/bank/`
+
+```
+bank.model.ts       — LoanApplicationDTO, BusinessLoanDTO, BankSettings (interestRateBp, maxLoanAmount)
+bank.validator.ts   — applyForLoanSchema, reviewApplicationSchema
+bank.engine.ts      — Re-imports calculateMonthlyPayment from banking.engine.ts (no duplication)
+bank.repository.ts  — Atomic: approve (debit business wallet → credit borrower) / deny / pay
+bank.service.ts     — applyForLoan, getApplications, reviewApplication, getLoans, makePayment
+__tests__/          — Tests: apply, approve/deny, payment, insufficient funds
 ```
 
-```text
-src/lib/discord.ts       — OAuth2 token exchange + user info fetch
-src/lib/session.ts       — cookie-based session middleware
+**Key flows**:
+- **Apply**: Borrower submits application → status=pending → bank owner notified
+- **Approve**: Owner reviews → atomic: BusinessWallet debited, borrower Wallet credited, BusinessLoan created
+- **Deny**: Owner sets reason → status=denied, applicant notified
+- **Payment**: Borrower pays → atomic: borrower Wallet debited, BusinessWallet credited (principal+interest split)
+- **Insufficient business funds**: Approval fails with clear error — bank must have funds to lend
+
+### 2.3 API Routes
+
+```
+POST   /api/businesses/[id]/loans/applications           — Apply for loan from this bank
+GET    /api/businesses/[id]/loans/applications           — Pending applications (owner only)
+POST   /api/businesses/[id]/loans/applications/[appId]/review — Approve/deny (owner only)
+GET    /api/businesses/[id]/loans                        — Active loans (owner sees all, borrower sees theirs)
+POST   /api/businesses/[id]/loans/[loanId]/pay           — Make payment (borrower)
 ```
 
-**API Routes:**
+### 2.4 Dashboard Pages
 
-```text
-src/app/api/auth/discord/route.ts            — GET: redirect to Discord OAuth
-src/app/api/auth/discord/callback/route.ts   — GET: handle callback, create user+session, set cookie
-src/app/api/auth/logout/route.ts             — POST: destroy session
-src/app/api/auth/me/route.ts                 — GET: current user DTO
+```
+/dashboard/businesses/banks                — Browse player-run banks
+/dashboard/businesses/banks/[id]/apply     — Loan application form (shows bank's rates)
+/dashboard/businesses/[id]                 — Bank owner dashboard: pending apps, active loans, wallet
 ```
 
-**Key**: Bridge service keeps `x-api-key` auth. User-facing routes use session cookies. `src/lib/auth.ts` checks either.
+### 2.5 Components + Tests
 
-### 1.4 User Domain Module
-
-```text
-src/domain/user/
-  user.model.ts          — UserDTO (id, displayName, avatarUrl, role)
-  user.service.ts        — getProfile, updateDisplayName
-  user.repository.ts
-  __tests__/user.service.test.ts
-```
-
-**API Routes:**
-
-```text
-src/app/api/users/me/route.ts               — GET/PATCH own profile
-```
-
-### 1.5 Server + Farm Domain Modules
-
-```text
-src/domain/server/
-  server.model.ts        — GameServer, GameServerDTO
-  server.service.ts      — registerServer, listServers (admin)
-  server.repository.ts
-  server.validator.ts
-  __tests__/server.service.test.ts
-
-src/domain/farm/
-  farm.model.ts          — Farm, FarmDTO, ClaimFarmInput
-  farm.service.ts        — claimFarm, releaseFarm, getMyFarms
-  farm.repository.ts
-  farm.validator.ts
-  __tests__/farm.service.test.ts
-```
-
-**API Routes:**
-
-```text
-src/app/api/servers/route.ts                 — GET list
-src/app/api/servers/[id]/farms/route.ts      — GET farms for server
-src/app/api/servers/[id]/farms/claim/route.ts — POST claim a slot
-src/app/api/servers/[id]/farms/release/route.ts — POST release a slot
-```
-
-### 1.6 Refactor Transaction Module
-
-Update `src/domain/transaction/` to be user-aware:
-
-- Transactions now have `senderId` and `recipientFarmId`
-- Validation ensures sender has a wallet with sufficient balance (for marketplace)
-- Bridge polls per `gameServerId`
-
-### 1.7 UI — Dashboard Shell
-
-**Pages:**
-
-```text
-src/app/page.tsx                              — Landing page (unauthenticated)
-src/app/login/page.tsx                        — Discord login button
-src/app/dashboard/layout.tsx                  — Auth guard + sidebar + header
-src/app/dashboard/page.tsx                    — Overview: my farms, wallet balance, recent activity
-src/app/dashboard/send/page.tsx               — Send money/equipment form
-src/app/dashboard/transactions/page.tsx       — Full transaction history
-src/app/dashboard/farms/page.tsx              — My farms + claim new
-```
-
-**Components (presentational only):**
-
-```text
-src/components/layout/Sidebar.tsx
-src/components/layout/Header.tsx
-src/components/dashboard/FarmCard.tsx
-src/components/dashboard/WalletCard.tsx
-src/components/dashboard/TransactionTable.tsx
-src/components/dashboard/SendForm.tsx
-src/components/dashboard/StatusBadge.tsx
-```
-
-**View models (decisions + derived state):**
-
-```text
-src/viewmodels/useDashboard.ts
-src/viewmodels/useSendTransaction.ts
-src/viewmodels/useTransactionHistory.ts
-```
-
-### 1.8 E2E Tests
-
-```text
-e2e/auth.spec.ts                — Discord login flow (mocked OAuth)
-e2e/dashboard.spec.ts           — Dashboard loads, shows farms
-e2e/send-transaction.spec.ts    — Full send flow
-```
+- `LoanApplicationCard.tsx` — shows applicant, amount, term, approve/deny buttons (owner view)
+- `BusinessLoanCard.tsx` — loan details, payment button (borrower view)
+- Unit tests, RTL tests, E2E test: `business-bank.spec.ts`
 
 ---
 
-## Phase 2: Wallet + Marketplace
+## Phase 3: Player-Run Dealership
 
-### 2.1 Wallet Domain Module
+### 3.1 New Prisma Model
 
-```text
-src/domain/wallet/
-  wallet.model.ts        — Wallet, WalletLedger, BalanceDTO
-  wallet.service.ts      — getBalance, deposit, withdraw, transfer
-  wallet.repository.ts   — all operations in DB transactions for consistency
-  wallet.validator.ts
-  __tests__/wallet.service.test.ts
+```
+DealershipListing: id, businessId→Business, itemId, itemName, category (equipment|commodity),
+  quantity, costBasis (BigInt), pricePerUnit (BigInt), status (active|sold|cancelled),
+  buyerId→User, recipientFarmId, transactionId
 ```
 
-**API Routes:**
+Add relation on User (`dealershipPurchases`).
 
-```text
-src/app/api/wallet/route.ts                  — GET balance
-src/app/api/wallet/deposit/route.ts          — POST deposit (triggers bridge to pull money from game)
-src/app/api/wallet/withdraw/route.ts         — POST withdraw (triggers bridge to send money to game)
-src/app/api/wallet/ledger/route.ts           — GET transaction history
+### 3.2 Domain: `src/domain/business/dealership/`
+
+```
+dealership.model.ts      — DealershipListingDTO, DealershipSettings
+dealership.validator.ts  — addInventorySchema, purchaseSchema (includes farmId for delivery)
+dealership.repository.ts — Atomic buy: debit buyer, credit business, mark sold, create Transaction
+dealership.service.ts    — addItem, removeItem, updatePrice, getInventory, purchaseItem, browseDealerships
+__tests__/               — Tests: add inventory, purchase with farm delivery, insufficient funds
 ```
 
-**Key design**: Every money movement goes through the wallet ledger. Deposit = bridge pulls money from game farm. Withdraw = bridge sends money to game farm. Transfer = wallet-to-wallet (instant, no bridge needed).
+**Key flow**:
+- **Purchase**: Buyer selects item + destination farm → atomic: buyer Wallet debited, BusinessWallet credited, listing marked sold, bridge `Transaction` created (type: `equipment`, recipientFarmId, gameServerId, equipmentId from listing)
+- **Bridge integration**: Reuses existing `Transaction` model — the bridge picks it up like any other equipment delivery
+- **Owner sees**: which server/farm the buyer selected for delivery
 
-### 2.2 Marketplace Domain Module
+### 3.3 API Routes
 
-```text
-src/domain/marketplace/
-  listing.model.ts       — Listing, ListingDTO, CreateListingInput
-  listing.service.ts     — createListing, buyListing, cancelListing, searchListings
-  listing.repository.ts
-  listing.validator.ts
-  __tests__/listing.service.test.ts
+```
+GET    /api/businesses/[id]/inventory              — Browse dealership inventory
+POST   /api/businesses/[id]/inventory              — Add item (owner only)
+PATCH  /api/businesses/[id]/inventory/[itemId]      — Update price (owner only)
+DELETE /api/businesses/[id]/inventory/[itemId]       — Remove item (owner only)
+POST   /api/businesses/[id]/inventory/[itemId]/buy  — Purchase + select farm for delivery
+GET    /api/businesses/dealerships?serverId=         — Browse all dealerships on a server
 ```
 
-**Prisma model:**
+### 3.4 Dashboard Pages
 
-```prisma
-model Listing {
-  id           String    @id @default(cuid())
-  sellerId     String
-  type         String    // equipment | commodity
-  itemId       String    // equipment catalog ID or commodity type
-  itemName     String
-  quantity     Int       @default(1)
-  pricePerUnit BigInt
-  status       String    @default("active") // active | sold | cancelled | expired
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-}
+```
+/dashboard/businesses/dealerships              — Browse dealerships
+/dashboard/businesses/dealerships/[id]         — Dealership storefront (inventory + buy buttons)
+/dashboard/businesses/[id]                     — Dealer owner: manage inventory, sales history
 ```
 
-**API Routes:**
+### 3.5 Components + Tests
 
-```text
-src/app/api/marketplace/listings/route.ts           — GET search, POST create
-src/app/api/marketplace/listings/[id]/route.ts      — GET detail, DELETE cancel
-src/app/api/marketplace/listings/[id]/buy/route.ts  — POST purchase
-```
-
-**Buy flow**: Buyer's wallet debited -> Seller's wallet credited -> Bridge delivers equipment to buyer's farm.
-
-**UI Pages:**
-
-```text
-src/app/dashboard/marketplace/page.tsx               — Browse/search listings
-src/app/dashboard/marketplace/sell/page.tsx           — Create listing
-src/app/dashboard/marketplace/my-listings/page.tsx    — My listings
-src/app/dashboard/wallet/page.tsx                     — Wallet balance + ledger
-```
-
-### 2.3 Notification System
-
-```text
-src/domain/notification/
-  notification.model.ts
-  notification.service.ts
-  notification.repository.ts
-  channels/
-    in-app.ts            — DB-backed in-app notifications
-    discord-webhook.ts   — Optional Discord DM/channel notifications
-```
+- `DealershipItemCard.tsx` — item name, price, buy button (customer) / edit/remove (owner)
+- Unit tests, RTL tests, E2E test: `business-dealership.spec.ts`
 
 ---
 
-## Phase 3: Economy + Businesses (Future)
+## Phase 4: Player-Run Insurance Company
 
-- **Price engine**: Supply/demand-based commodity pricing
-- **Businesses**: Player-owned dealerships, processors, transport companies
-- **Contracts**: "Deliver 10t wheat to X for $Y" job board
-- **Land/Property**: Auctions, leasing, property taxes
+### 4.1 New Prisma Models
+
+```
+BusinessPolicy: id, businessId→Business, holderId→User, gameServerId, type (crop|vehicle|liability),
+  coverageAmount, premium, deductible, status (active|expired|claimed|cancelled),
+  commodityId, commodityName, strikePrice, equipmentId, equipmentName, startsAt, expiresAt
+
+BusinessClaim: id, businessId→Business, policyId→BusinessPolicy, claimAmount, payout,
+  reason, status (pending|approved|denied), resolvedAt
+```
+
+Add relations on User (`businessPolicies`).
+
+### 4.2 Domain: `src/domain/business/insurance-co/`
+
+```
+insurance-co.model.ts      — BusinessPolicyDTO, BusinessClaimDTO, InsuranceCoSettings (riskRates, maxCoverage)
+insurance-co.validator.ts  — purchasePolicySchema, fileClaimSchema, reviewClaimSchema
+insurance-co.engine.ts     — Re-imports from insurance.engine.ts, applies custom risk rates from settings
+insurance-co.repository.ts — Atomic: premium payment, claim payout
+insurance-co.service.ts    — purchasePolicy, fileClaim, getClaimsForReview, reviewClaim, suggestPayout
+__tests__/                 — Tests: purchase, file claim, approve/deny, insufficient business funds
+```
+
+**Key flows**:
+- **Purchase**: Customer pays premium → atomic: customer Wallet debited, BusinessWallet credited
+- **File claim**: Customer submits claim → status=pending → owner notified
+- **Review**: Owner approves → atomic: BusinessWallet debited, customer Wallet credited. If business wallet insufficient → cannot approve (real risk!)
+- **Deny**: Owner sets reason → no money moves
+- **suggestPayout**: Pure function helper showing calculated payout (non-binding, helps owner decide)
+
+### 4.3 API Routes
+
+```
+GET    /api/businesses/[id]/policies                     — Policies issued (owner: all, customer: theirs)
+POST   /api/businesses/[id]/policies                     — Buy policy from this insurer
+POST   /api/businesses/[id]/policies/[policyId]/claim    — File claim
+GET    /api/businesses/[id]/claims                       — Pending claims (owner only)
+POST   /api/businesses/[id]/claims/[claimId]/review      — Approve/deny (owner only)
+GET    /api/businesses/insurers?serverId=                 — Browse all insurers on a server
+```
+
+### 4.4 Dashboard Pages
+
+```
+/dashboard/businesses/insurers              — Browse insurance companies
+/dashboard/businesses/insurers/[id]         — View rates, buy policy
+/dashboard/businesses/[id]                  — Insurer owner: pending claims, policies, wallet
+```
+
+### 4.5 Components + Tests
+
+- `BusinessPolicyCard.tsx` — type, coverage, premium, file claim button
+- `BusinessClaimCard.tsx` — claim details, approve/deny buttons (owner), status badge (customer)
+- Unit tests, RTL tests, E2E test: `business-insurance.spec.ts`
 
 ---
 
-## Phase 4: Community + Social (Future)
+## Phase 5: Player-Run Trucking Company
 
-- **Events**: Monthly auctions, harvest competitions
-- **Careers/Roles**: Farmer, trucker, inspector, dealer
-- **Leaderboards**: Richest, most productive, biggest business
-- **Federation**: Optional cross-server shared economy
+### 5.1 New Prisma Model
+
+```
+DeliveryContract: id, businessId→Business, posterId→User, gameServerId,
+  destinationFarmId→Farm, itemDescription, payout (BigInt, escrowed on creation),
+  status (open|accepted|in_transit|delivered|completed|cancelled),
+  acceptedAt, deliveredAt, completedAt
+```
+
+Add relations on User (`deliveryContractsPoster`) and Farm (`deliveryContracts`).
+
+### 5.2 Domain: `src/domain/business/trucking/`
+
+```
+trucking.model.ts      — DeliveryContractDTO (includes server name, farm name, farm slot for trucker)
+trucking.validator.ts  — postDeliverySchema, acceptSchema, confirmSchema
+trucking.repository.ts — Atomic: escrow on post, release on completion, refund on cancel
+trucking.service.ts    — postDeliveryRequest, acceptDelivery, markDelivered, confirmDelivery, cancelDelivery
+__tests__/             — Tests: full lifecycle, escrow, cancellation refund
+```
+
+**Key flows**:
+- **Post request**: Any user posts delivery job with payout → funds escrowed from poster's Wallet
+- **Accept**: Trucking owner accepts → status=accepted, owner sees destination server + farm name + slot
+- **Deliver**: Trucking owner marks delivered (they did the in-game action)
+- **Confirm**: Poster confirms receipt → escrow released to BusinessWallet
+- **Cancel**: If not yet accepted → refund poster. If accepted but stale → configurable timeout
+
+### 5.3 API Routes
+
+```
+POST   /api/businesses/[id]/deliveries                        — Post delivery request (any user)
+GET    /api/businesses/[id]/deliveries                        — Open deliveries (owner: all, poster: theirs)
+POST   /api/businesses/[id]/deliveries/[deliveryId]/accept    — Accept (owner only)
+POST   /api/businesses/[id]/deliveries/[deliveryId]/deliver   — Mark delivered (owner only)
+POST   /api/businesses/[id]/deliveries/[deliveryId]/confirm   — Confirm receipt (poster only)
+POST   /api/businesses/[id]/deliveries/[deliveryId]/cancel    — Cancel (poster if not accepted, owner if accepted)
+GET    /api/businesses/trucking?serverId=                      — Browse trucking companies on a server
+```
+
+### 5.4 Dashboard Pages
+
+```
+/dashboard/businesses/trucking                  — Browse trucking companies
+/dashboard/businesses/trucking/[id]/request     — Post delivery request form
+/dashboard/businesses/[id]                      — Trucker owner: open jobs, destination info, wallet
+```
+
+### 5.5 Components + Tests
+
+- `DeliveryContractCard.tsx` — item, payout, destination (server/farm/slot), status, action buttons
+- Unit tests, RTL tests, E2E test: `business-trucking.spec.ts`
 
 ---
 
-## Phase 5: Advanced (Future)
+## Phase 6: Notifications + Polish
 
-- **Production chains**: Raw -> factory -> finished goods
-- **Banking**: Player-owned banks, loans, savings, CDs
-- **Insurance**: Crop, vehicle, liability
-- **Breeding**: Horse genetics system
-
----
-
-## What Makes FarmCoop Better Than FSN
-
-1. **Web-to-game bridge** — send money/equipment without joining the server (working now)
-2. **Modern stack** — Next.js 16, React 19, TypeScript vs dated PHP. Fast, mobile-friendly
-3. **Discord-native** — login, notifications, bot integration where the community lives
-4. **Server-owner sovereignty** — self-host or cloud-host per community, not locked into one central platform
-5. **Open architecture** — typed APIs, Zod schemas, clean domain layers. Easy to extend
+- Add notification types: `loan_application_received`, `loan_application_approved`, `loan_application_denied`, `business_loan_payment`, `dealership_sale`, `insurance_claim_filed`, `insurance_claim_resolved`, `delivery_request_posted`, `delivery_accepted`, `delivery_confirmed`
+- Add to `NotificationType` in `src/domain/notification/notification.model.ts`
+- Fire notifications in all business services (fire-and-forget pattern)
+- Business browse pages: search/filter UI, sorted by ratings or activity
 
 ---
 
-## Build Order (Phase 1)
+## Critical Files to Modify
 
-1. PostgreSQL migration
-2. Discord OAuth + session auth
-3. User profiles
-4. Game server registration
-5. Farm claiming
-6. Transaction refactor (user-aware)
-7. Wallet system (basic balance)
-8. Bridge multi-server refactor
-9. Dashboard UI shell (layout, sidebar, auth guard)
-10. Dashboard pages (overview, send, history, farms)
-11. E2E tests
+| File | Change |
+|------|--------|
+| `prisma/schema.prisma` | Add 8 new models + relations on User, GameServer, Farm |
+| `src/domain/wallet/wallet.model.ts` | Add new LedgerType values |
+| `src/domain/notification/notification.model.ts` | Add new NotificationType values |
+| `src/components/layout/Sidebar.tsx` | Add "Businesses" nav item |
+| `src/domain/banking/banking.engine.ts` | **No changes** — re-imported by bank subdomain |
+| `src/domain/insurance/insurance.engine.ts` | **No changes** — re-imported by insurance-co subdomain |
 
+## Files to Create (by phase)
 
+| Phase | New Files |
+|-------|-----------|
+| 1 | 7 domain files + 2 components + 6 API routes + 4 pages + tests |
+| 2 | 6 domain files + 2 components + 5 API routes + 3 pages + tests |
+| 3 | 5 domain files + 1 component + 6 API routes + 3 pages + tests |
+| 4 | 6 domain files + 2 components + 5 API routes + 3 pages + tests |
+| 5 | 5 domain files + 1 component + 6 API routes + 3 pages + tests |
 
-Phase 3: Economy + Businesses — FUTURE
+## Coexistence with Existing Systems
 
-Price engine (supply/demand commodity pricing)
-Businesses (player-owned dealerships, processors, transport companies)
-Contracts (job board: "deliver 10t wheat for $Y")
-Land/Property (auctions, leasing, property taxes)
+**The existing auto-approve systems remain untouched:**
+- System bank (`/dashboard/banking`) — auto-approved loans at 5%, unlimited funds
+- System insurance (`/dashboard/insurance`) — auto-evaluated claims
+- System marketplace (`/dashboard/marketplace`) — P2P listings
+- System contracts (`/dashboard/contracts`) — P2P escrow contracts
 
-
-Phase 4: Community + Social — FUTURE
-
-Events (monthly auctions, harvest competitions)
-Careers/Roles (farmer, trucker, inspector, dealer)
-Leaderboards (richest, most productive)
-Federation (cross-server shared economy)
-
-
-Phase 5: Advanced — FUTURE
-
-Production chains (raw → factory → finished goods)
-Banking (loans, savings, CDs)
-Insurance (crop, vehicle, liability)
-Breeding (horse genetics)
----
+Player-run businesses are a **parallel opt-in alternative** accessed through `/dashboard/businesses/*`. No existing code is modified except adding sidebar nav, new ledger types, and new notification types.
 
 ## Verification
 
-- All 44+ existing tests continue to pass after each step
-- New domain modules have unit tests before implementation
-- Discord OAuth tested with real Discord app (dev credentials)
-- Bridge continues to work in both local and FTP modes
-- E2E Playwright tests cover: login -> dashboard -> send transaction -> verify status
-- Manual test: send money from web dashboard to in-game farm on G-Portal server
+- All 424 existing tests continue passing (no existing code modified)
+- New unit tests for each business domain module
+- New RTL tests for each new component
+- New E2E tests for each business type flow
+- Manual: create business → deposit funds → customer interacts → verify wallet balances
+- Career gating: verify wrong career cannot create business type
+- Insufficient funds: verify business operations fail gracefully when wallet is empty
+- `npm run build` passes after each phase

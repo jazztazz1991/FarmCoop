@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
 
@@ -37,7 +38,7 @@ export default function ContractsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchContracts = async () => {
+  const fetchContracts = useCallback(async () => {
     if (!selectedServer) {
       setContracts([]);
       return;
@@ -48,11 +49,11 @@ export default function ContractsPage() {
       setContracts(await res.json());
     }
     setLoading(false);
-  };
+  }, [selectedServer]);
 
   useEffect(() => {
     fetchContracts();
-  }, [selectedServer]);
+  }, [fetchContracts]);
 
   const handleClaim = async (contractId: string) => {
     setError("");
@@ -60,7 +61,7 @@ export default function ContractsPage() {
     setClaimingId(contractId);
 
     try {
-      const res = await fetch(`/api/contracts/${contractId}/claim`, {
+      const res = await apiFetch(`/api/contracts/${contractId}/claim`, {
         method: "POST",
       });
 

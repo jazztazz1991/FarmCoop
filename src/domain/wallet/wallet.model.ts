@@ -31,4 +31,14 @@ export type LedgerType =
   | "insurance_premium"
   | "insurance_payout"
   | "production_input_cost"
-  | "production_output_sale";
+  | "production_output_sale"
+  | "business_wallet_deposit"
+  | "business_wallet_withdrawal"
+  | "business_loan_disbursement"
+  | "business_loan_repayment"
+  | "dealership_purchase"
+  | "dealership_sale_income"
+  | "business_premium_income"
+  | "business_claim_payout"
+  | "delivery_escrow"
+  | "delivery_payout_received";

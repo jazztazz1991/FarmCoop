@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import FactoryCard from "@/components/dashboard/FactoryCard";
 import RecipeCard from "@/components/dashboard/RecipeCard";
 
@@ -68,20 +69,20 @@ export default function ProductionPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchFactories = async () => {
+  const fetchFactories = useCallback(async () => {
     if (!selectedServer) return;
     setLoading(true);
     const res = await fetch(`/api/servers/${selectedServer}/factories`);
     if (res.ok) setFactories(await res.json());
     setLoading(false);
-  };
+  }, [selectedServer]);
 
-  const fetchRecipes = async () => {
+  const fetchRecipes = useCallback(async () => {
     setLoading(true);
     const res = await fetch("/api/recipes");
     if (res.ok) setRecipes(await res.json());
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     if (!selectedServer) {
@@ -91,7 +92,7 @@ export default function ProductionPage() {
     if (activeTab === "factories") fetchFactories();
     if (activeTab === "recipes") fetchRecipes();
     if (activeTab === "create") fetchRecipes();
-  }, [selectedServer, activeTab]);
+  }, [selectedServer, activeTab, fetchFactories, fetchRecipes]);
 
   const handleProduce = (factoryId: string) => {
     setProduceFactoryId(factoryId);
@@ -104,7 +105,7 @@ export default function ProductionPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/factories/${produceFactoryId}/produce`, {
+      const res = await apiFetch(`/api/factories/${produceFactoryId}/produce`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cycles: Number(cycles) }),
@@ -129,7 +130,7 @@ export default function ProductionPage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/servers/${selectedServer}/factories`, {
+      const res = await apiFetch(`/api/servers/${selectedServer}/factories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

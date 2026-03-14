@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 import PolicyCard from "@/components/dashboard/PolicyCard";
 import ClaimCard from "@/components/dashboard/ClaimCard";
 import PremiumCalculator from "@/components/dashboard/PremiumCalculator";
@@ -72,7 +73,7 @@ export default function InsurancePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchPolicies = async () => {
+  const fetchPolicies = useCallback(async () => {
     if (!selectedServer) return;
     setLoading(true);
     const res = await fetch(
@@ -80,9 +81,9 @@ export default function InsurancePage() {
     );
     if (res.ok) setPolicies(await res.json());
     setLoading(false);
-  };
+  }, [selectedServer]);
 
-  const fetchClaims = async () => {
+  const fetchClaims = useCallback(async () => {
     if (!selectedServer) return;
     setLoading(true);
     const res = await fetch(
@@ -90,7 +91,7 @@ export default function InsurancePage() {
     );
     if (res.ok) setClaims(await res.json());
     setLoading(false);
-  };
+  }, [selectedServer]);
 
   useEffect(() => {
     if (!selectedServer) {
@@ -100,7 +101,7 @@ export default function InsurancePage() {
     }
     if (activeTab === "policies") fetchPolicies();
     if (activeTab === "claims") fetchClaims();
-  }, [selectedServer, activeTab]);
+  }, [selectedServer, activeTab, fetchPolicies, fetchClaims]);
 
   const handleFileClaim = (policyId: string) => {
     setClaimPolicyId(policyId);
@@ -114,7 +115,7 @@ export default function InsurancePage() {
     setSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/insurance/policies/${claimPolicyId}/claim`, {
+      const res = await apiFetch(`/api/insurance/policies/${claimPolicyId}/claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -175,7 +176,7 @@ export default function InsurancePage() {
         body.equipmentName = purchaseEquipment;
       }
 
-      const res = await fetch("/api/insurance/policies", {
+      const res = await apiFetch("/api/insurance/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

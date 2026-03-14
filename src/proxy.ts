@@ -36,7 +36,7 @@ function isAuthPath(pathname: string): boolean {
   );
 }
 
-export function middleware(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request);
 

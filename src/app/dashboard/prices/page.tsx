@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 
 interface Server {
   id: string;
@@ -48,7 +49,7 @@ export default function PricesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchPrices = () => {
+  const fetchPrices = useCallback(() => {
     if (!selectedServer) {
       setPrices([]);
       return;
@@ -58,11 +59,11 @@ export default function PricesPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setPrices)
       .finally(() => setLoading(false));
-  };
+  }, [selectedServer]);
 
   useEffect(() => {
     fetchPrices();
-  }, [selectedServer]);
+  }, [fetchPrices]);
 
   const showHistory = async (commodityId: string) => {
     setSelectedCommodity(commodityId);
@@ -79,7 +80,7 @@ export default function PricesPage() {
     setPriceSuccess("");
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/servers/${selectedServer}/prices`, {
+      const res = await apiFetch(`/api/servers/${selectedServer}/prices`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

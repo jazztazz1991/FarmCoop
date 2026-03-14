@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 interface LeaderboardEntry {
   rank: number;
@@ -105,9 +106,11 @@ export default function LeaderboardPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {entry.avatarUrl ? (
-                        <img
-                          src={entry.avatarUrl}
+                        <Image
+                          src={entry.avatarUrl!}
                           alt=""
+                          width={32}
+                          height={32}
                           className="w-8 h-8 rounded-full"
                         />
                       ) : (

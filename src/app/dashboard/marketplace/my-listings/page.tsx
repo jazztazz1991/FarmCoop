@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import { apiFetch } from "@/lib/fetch";
 
 interface Listing {
   id: string;
@@ -37,7 +38,7 @@ export default function MyListingsPage() {
     setCancellingId(id);
 
     try {
-      const res = await fetch(`/api/marketplace/listings/${id}`, {
+      const res = await apiFetch(`/api/marketplace/listings/${id}`, {
         method: "DELETE",
       });
 

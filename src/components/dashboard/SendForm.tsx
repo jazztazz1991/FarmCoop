@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/fetch";
 
 interface Farm {
   id: string;
@@ -49,7 +50,7 @@ export default function SendForm({ farms, onSent }: SendFormProps) {
         body.equipmentId = equipmentId;
       }
 
-      const res = await fetch("/api/transactions", {
+      const res = await apiFetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
