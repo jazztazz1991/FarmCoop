@@ -37,28 +37,15 @@ describe("BusinessWalletCard", () => {
     expect(screen.getByText("Business Wallet")).toBeInTheDocument();
   });
 
+  it("renders balance subtitle with USD label", () => {
+    render(<BusinessWalletCard {...defaultProps} />);
+    expect(screen.getByText("Balance: $10000.00 USD")).toBeInTheDocument();
+  });
+
   it("renders deposit and withdraw buttons", () => {
     render(<BusinessWalletCard {...defaultProps} />);
     expect(screen.getByText("Deposit")).toBeInTheDocument();
     expect(screen.getByText("Withdraw")).toBeInTheDocument();
-  });
-
-  it("renders ledger entries", () => {
-    render(<BusinessWalletCard {...defaultProps} />);
-    expect(screen.getByText("Owner deposit")).toBeInTheDocument();
-    expect(screen.getByText("Owner withdrawal")).toBeInTheDocument();
-  });
-
-  it("shows positive amounts in green", () => {
-    render(<BusinessWalletCard {...defaultProps} />);
-    const positiveAmount = screen.getByText("+5,000");
-    expect(positiveAmount.className).toContain("text-green-400");
-  });
-
-  it("shows negative amounts in red", () => {
-    render(<BusinessWalletCard {...defaultProps} />);
-    const negativeAmount = screen.getByText("-2,000");
-    expect(negativeAmount.className).toContain("text-red-400");
   });
 
   it("shows error for empty amount", () => {
@@ -71,7 +58,7 @@ describe("BusinessWalletCard", () => {
     const onDeposit = vi.fn().mockResolvedValue(undefined);
     render(<BusinessWalletCard {...defaultProps} onDeposit={onDeposit} />);
 
-    const input = screen.getByPlaceholderText("Amount");
+    const input = screen.getByPlaceholderText("Amount (e.g., 100.00)");
     fireEvent.change(input, { target: { value: "3000" } });
     fireEvent.click(screen.getByText("Deposit"));
 
@@ -82,20 +69,10 @@ describe("BusinessWalletCard", () => {
     const onWithdraw = vi.fn().mockResolvedValue(undefined);
     render(<BusinessWalletCard {...defaultProps} onWithdraw={onWithdraw} />);
 
-    const input = screen.getByPlaceholderText("Amount");
+    const input = screen.getByPlaceholderText("Amount (e.g., 100.00)");
     fireEvent.change(input, { target: { value: "1000" } });
     fireEvent.click(screen.getByText("Withdraw"));
 
     expect(onWithdraw).toHaveBeenCalledWith("1000");
-  });
-
-  it("renders Recent Transactions heading when ledger has entries", () => {
-    render(<BusinessWalletCard {...defaultProps} />);
-    expect(screen.getByText("Recent Transactions")).toBeInTheDocument();
-  });
-
-  it("does not render Recent Transactions when ledger is empty", () => {
-    render(<BusinessWalletCard {...defaultProps} ledger={[]} />);
-    expect(screen.queryByText("Recent Transactions")).not.toBeInTheDocument();
   });
 });

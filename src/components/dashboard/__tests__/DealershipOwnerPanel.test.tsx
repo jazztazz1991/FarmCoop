@@ -1,10 +1,56 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import DealershipOwnerPanel from "../DealershipOwnerPanel";
+import type { FS25Item } from "@/domain/business/dealership/fs25-catalog";
+
+/* ── mock ItemPicker ────────────────────────────────────────────────── */
+const MOCK_ITEM: FS25Item = {
+  itemId: "combine-5",
+  itemName: "Combine Harvester",
+  brand: "John Deere",
+  type: "harvester",
+  category: "equipment",
+};
+
+vi.mock("../ItemPicker", () => ({
+  default: function MockItemPicker({
+    onSelect,
+    onSwitchToManual,
+    selected,
+    disabled,
+  }: {
+    onSelect: (item: FS25Item | null) => void;
+    onSwitchToManual: () => void;
+    selected: FS25Item | null;
+    disabled?: boolean;
+  }) {
+    return (
+      <div data-testid="item-picker">
+        {selected ? (
+          <>
+            <span>{selected.itemName}</span>
+            <button onClick={() => onSelect(null)} disabled={disabled}>
+              Clear selection
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => onSelect(MOCK_ITEM)} disabled={disabled}>
+              Select Item
+            </button>
+            <button onClick={onSwitchToManual}>Enter manually instead</button>
+          </>
+        )}
+      </div>
+    );
+  },
+}));
 
 /* ── mock apiFetch ─────────────────────────────────────────────────── */
 const mockApiFetch = vi.fn();
-vi.mock("@/lib/fetch", () => ({ apiFetch: (...args: unknown[]) => mockApiFetch(...args) }));
+vi.mock("@/lib/fetch", () => ({
+  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
+}));
 
 /* ── mock global fetch (used for GET) ──────────────────────────────── */
 const mockFetch = vi.fn();
@@ -84,17 +130,18 @@ describe("DealershipOwnerPanel", () => {
     expect(screen.getByText("commodity")).toBeInTheDocument();
   });
 
-  it("renders status badges", async () => {
+  it("renders status text for sold items", async () => {
     render(<DealershipOwnerPanel businessId="biz-1" />);
-    expect(await screen.findByText("active")).toBeInTheDocument();
-    expect(screen.getByText("sold")).toBeInTheDocument();
+    expect(await screen.findByText("sold")).toBeInTheDocument();
   });
 
   it("shows empty state when no items exist", async () => {
     mockFetch.mockReturnValue(jsonOk([]));
     render(<DealershipOwnerPanel businessId="biz-1" />);
     expect(
-      await screen.findByText("No inventory items yet.")
+      await screen.findByText(
+        "No items in inventory. Add your first item to get started."
+      )
     ).toBeInTheDocument();
   });
 
@@ -106,44 +153,41 @@ describe("DealershipOwnerPanel", () => {
     ).toBeInTheDocument();
   });
 
-  /* ── Add Item form ──────────────────────────────────────────────── */
-  it("renders the Add Item form with all fields", () => {
+  /* ── Add Item form — catalog mode ───────────────────────────────── */
+  it("renders the Add Item form with ItemPicker in catalog mode by default", () => {
     render(<DealershipOwnerPanel businessId="biz-1" />);
     expect(screen.getByRole("heading", { name: "Add Item" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add Item" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Item ID")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Item Name")).toBeInTheDocument();
+    expect(screen.getByTestId("item-picker")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Quantity")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Price per Unit")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /add new item/i })
+    ).toBeInTheDocument();
   });
 
-  it("shows validation error when submitting empty form", async () => {
+  it("shows validation error when submitting with no item selected", async () => {
     render(<DealershipOwnerPanel businessId="biz-1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Add Item" }));
+    fireEvent.click(screen.getByRole("button", { name: /add new item/i }));
     expect(
       screen.getByText("All fields are required with valid values")
     ).toBeInTheDocument();
   });
 
-  it("calls POST with form data and refreshes list", async () => {
+  it("calls POST with catalog item data after selecting from picker", async () => {
     mockApiFetch.mockReturnValue(jsonOk({ id: "listing-3" }));
 
     render(<DealershipOwnerPanel businessId="biz-1" />);
     await screen.findByText("Fendt Vario 900");
 
-    fireEvent.change(screen.getByPlaceholderText("Item ID"), {
-      target: { value: "combine-5" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Item Name"), {
-      target: { value: "Combine Harvester" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Select Item" }));
+
     fireEvent.change(screen.getByPlaceholderText("Quantity"), {
       target: { value: "3" },
     });
     fireEvent.change(screen.getByPlaceholderText("Price per Unit"), {
       target: { value: "500000" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add Item" }));
+    fireEvent.click(screen.getByRole("button", { name: /add new item/i }));
 
     await waitFor(() => {
       expect(mockApiFetch).toHaveBeenCalledWith(
@@ -170,21 +214,74 @@ describe("DealershipOwnerPanel", () => {
     render(<DealershipOwnerPanel businessId="biz-1" />);
     await screen.findByText("Fendt Vario 900");
 
-    fireEvent.change(screen.getByPlaceholderText("Item ID"), {
-      target: { value: "tractor-100" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Item Name"), {
-      target: { value: "Duplicate" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Select Item" }));
     fireEvent.change(screen.getByPlaceholderText("Quantity"), {
       target: { value: "1" },
     });
     fireEvent.change(screen.getByPlaceholderText("Price per Unit"), {
       target: { value: "100" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add Item" }));
+    fireEvent.click(screen.getByRole("button", { name: /add new item/i }));
 
     expect(await screen.findByText("Duplicate item ID")).toBeInTheDocument();
+  });
+
+  /* ── Manual mode ────────────────────────────────────────────────── */
+  it("switches to manual mode when Enter manually instead is clicked", () => {
+    render(<DealershipOwnerPanel businessId="biz-1" />);
+    fireEvent.click(screen.getByText("Enter manually instead"));
+    expect(screen.getByPlaceholderText("Item ID")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Item Name")).toBeInTheDocument();
+    expect(screen.getByText("← Pick from catalog")).toBeInTheDocument();
+  });
+
+  it("calls POST with manual item data in manual mode", async () => {
+    mockApiFetch.mockReturnValue(jsonOk({ id: "listing-4" }));
+
+    render(<DealershipOwnerPanel businessId="biz-1" />);
+    await screen.findByText("Fendt Vario 900");
+
+    fireEvent.click(screen.getByText("Enter manually instead"));
+
+    fireEvent.change(screen.getByPlaceholderText("Item ID"), {
+      target: { value: "custom-item-99" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Item Name"), {
+      target: { value: "Custom Sprayer" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Quantity"), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Price per Unit"), {
+      target: { value: "75000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add new item/i }));
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        "/api/businesses/biz-1/inventory",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            itemId: "custom-item-99",
+            itemName: "Custom Sprayer",
+            category: "equipment",
+            quantity: 1,
+            pricePerUnit: "75000",
+          }),
+        })
+      );
+    });
+  });
+
+  it("switches back to catalog mode when Pick from catalog is clicked", () => {
+    render(<DealershipOwnerPanel businessId="biz-1" />);
+    fireEvent.click(screen.getByText("Enter manually instead"));
+    expect(screen.getByPlaceholderText("Item ID")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("← Pick from catalog"));
+    expect(screen.getByTestId("item-picker")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Item ID")).not.toBeInTheDocument();
   });
 
   /* ── active item actions ────────────────────────────────────────── */

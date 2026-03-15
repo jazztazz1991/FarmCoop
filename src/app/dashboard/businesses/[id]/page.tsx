@@ -105,7 +105,18 @@ export default function BusinessDetailPage({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Status</span>
-              <span className="text-white capitalize">{business.status}</span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    business.status === "active"
+                      ? "bg-green-400"
+                      : business.status === "suspended"
+                        ? "bg-yellow-400"
+                        : "bg-gray-500"
+                  }`}
+                />
+                <span className="text-white capitalize">{business.status}</span>
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Created</span>
